@@ -1,0 +1,61 @@
+# Minimal Airflow Config for Dev (Cost Optimized)
+executor: LocalExecutor
+
+# Use the official image
+images:
+  airflow:
+    repository: apache/airflow
+    tag: 2.10.5
+    pullPolicy: IfNotPresent
+
+# Extra Pip Packages
+extraPipPackages:
+  - "apache-airflow-providers-microsoft-azure"
+
+# Disable internal Postgres HA (use simple instance)
+postgresql:
+  enabled: true
+  image:
+    registry: public.ecr.aws
+    repository: bitnami/postgresql
+    tag: 16
+  primary:
+    persistence:
+      enabled: false # Use ephemeral storage for dev to save costs on disks
+  readReplicas:
+    persistence:
+      enabled: false
+
+# Disable Redis (not needed for LocalExecutor)
+redis:
+  enabled: false
+
+# Resources - Keep them small for Free Tier
+resources:
+  requests:
+    cpu: "100m"
+    memory: "256Mi"
+  limits:
+    cpu: "500m"
+    memory: "1024Mi"
+
+# DAGs Configuration
+dags:
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClassName: azurefile-csi
+    accessMode: ReadWriteMany
+
+# Webserver Config
+webserver:
+  service:
+    type: ClusterIP
+
+# Logs
+logs:
+  persistence:
+    enabled: false
+
+# Default Admin User
+webserverSecretKey: "supersecretkey"

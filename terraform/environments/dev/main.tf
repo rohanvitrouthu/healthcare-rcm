@@ -100,6 +100,56 @@ module "key_vault" {
   depends_on = [module.storage]
 }
 
+# AKS Cluster Module
+module "aks" {
+  source = "../../modules/aks"
+
+  cluster_name        = "aks-${var.project_name}-${var.environment}"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.main.name
+  dns_prefix          = "aks-${var.project_name}-${var.environment}"
+
+  # Cluster configuration
+  kubernetes_version  = "1.32.9"
+  node_count          = 1
+  min_count           = 1
+  max_count           = 3
+  vm_size             = "Standard_D2s_v3" # Replaced B2s with D2s_v3 per availability
+  enable_auto_scaling = true
+
+  tags = {
+    CostCenter  = "DataEngineering"
+    Environment = var.environment
+    Project     = var.project_name
+  }
+
+  depends_on = [azurerm_resource_group.main]
+}
+
+# ACR Module
+module "acr" {
+  source = "../../modules/acr"
+
+  acr_name            = "acr${var.project_name}${var.environment}"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = var.location
+
+  tags = {
+    CostCenter  = "DataEngineering"
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}
+
+# Allow AKS to pull images from ACR
+resource "azurerm_role_assignment" "aks_acr_pull" {
+  scope                = module.acr.acr_id
+  role_definition_name = "AcrPull"
+  principal_id         = module.aks.kubelet_identity_object_id
+  
+  depends_on = [module.aks, module.acr]
+}
+
 # Outputs
 output "storage_account_name" {
   value = module.storage.storage_account_name
@@ -136,4 +186,34 @@ output "key_vault_rbac_info" {
     administrator   = "Current user/service principal"
     secrets_officer = "Current user/service principal"
   }
+}
+
+output "aks_cluster_name" {
+  description = "Name of the AKS cluster"
+  value       = module.aks.cluster_name
+}
+
+output "aks_cluster_id" {
+  description = "ID of the AKS cluster"
+  value       = module.aks.cluster_id
+}
+
+output "aks_cluster_fqdn" {
+  description = "FQDN of the AKS cluster"
+  value       = module.aks.cluster_fqdn
+}
+
+output "aks_get_credentials_command" {
+  description = "Command to get credentials for kubectl"
+  value       = "az aks get-credentials --resource-group ${azurerm_resource_group.main.name} --name ${module.aks.cluster_name}"
+}
+
+output "acr_login_server" {
+  description = "ACR Login Server"
+  value       = module.acr.acr_login_server
+}
+
+output "acr_name" {
+  description = "ACR Name"
+  value       = "acr${var.project_name}${var.environment}"
 }

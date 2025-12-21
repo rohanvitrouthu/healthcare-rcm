@@ -1,0 +1,20 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: npi-extractor-job
+spec:
+  template:
+    spec:
+      containers:
+      - name: npi-extractor
+        image: acrhealthcarercmdev.azurecr.io/npi-extractor:v1
+        imagePullPolicy: Always
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+      restartPolicy: Never
+  backoffLimit: 2
