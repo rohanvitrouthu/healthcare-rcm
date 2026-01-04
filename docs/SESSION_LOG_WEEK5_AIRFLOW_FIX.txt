@@ -1,0 +1,78 @@
+# Session Log: Airflow Deployment Troubleshooting & Fixes
+Date: December 20, 2025
+Project: Healthcare RCM Data Engineering
+
+## 1. Summary
+This session focused on debugging and successfully deploying Apache Airflow on the Azure Kubernetes Service (AKS) cluster. We encountered multiple infrastructure and configuration blocking issues, which were systematically resolved.
+
+## 2. Errors Encountered
+
+### A. Node Disk Pressure
+- **Error:** `0/1 nodes are available: 1 node(s) had untolerated taint {node.kubernetes.io/disk-pressure: }`
+- **Observation:** `kubectl describe node` showed `DiskPressure: True`.
+- **Cause:** The default OS disk size of 30GB for the `Standard_D2s_v3` node was insufficient for the container images and logs required by Airflow and system components.
+
+### B. PostgreSQL Image Pull Failure
+- **Error:** `ImagePullBackOff` and `ErrImagePull` for `airflow-postgresql-0`.
+- **Details:** 
+  - `docker.io/bitnami/postgresql:16.1.0-debian-11-r15`: Not found.
+  - `docker.io/bitnami/postgresql:16`: Failed to resolve reference (likely Docker Hub rate limiting or transient registry issue).
+- **Cause:** Unreliability/availability issues with the specific Bitnami tags on Docker Hub or network restrictions.
+
+### C. Airflow API Server Crash (Version Mismatch)
+- **Error:** `CrashLoopBackOff` on `airflow-api-server` pod.
+- **Log Output:** `airflow command error: argument GROUP_OR_COMMAND: invalid choice: 'api-server'`
+- **Cause:** We were using a newer Helm chart (v1.18.0+) which attempts to deploy a standalone `api-server` component, but the underlying Airflow image/configuration or the chart version itself was not fully compatible with the specific 2.10.x deployment structure we intended for a simple Dev setup.
+
+## 3. Solutions Implemented
+
+### A. Infrastructure Upgrade (Terraform)
+- **Action:** Increased AKS Node OS Disk Size.
+- **File Modified:** `terraform/modules/aks/main.tf`
+- **Change:**
+  ```hcl
+  default_node_pool {
+    # ...
+    os_disk_size_gb             = 50  # Increased from 30
+    temporary_name_for_rotation = "temppool" # Added to allow node pool replacement
+  }
+  ```
+- **Result:** Node recreated with 50GB disk. `DiskPressure` taint removed.
+
+### B. Registry Switch for PostgreSQL
+- **Action:** Switched from Docker Hub to Amazon ECR Public Gallery for the Bitnami image.
+- **File Modified:** `kubernetes/airflow/values.yaml`
+- **Change:**
+  ```yaml
+  postgresql:
+    image:
+      registry: public.ecr.aws
+      repository: bitnami/postgresql
+      tag: 16
+  ```
+- **Result:** PostgreSQL image pulled successfully.
+
+### C. Helm Chart & Version Alignment
+- **Action:** Pinned the Helm chart version to `1.16.0` and Airflow image to `2.10.5`.
+- **Reason:** Chart version `1.16.0` is a stable release compatible with Airflow 2.10.x that does not enforce the problematic separate `api-server` deployment by default or handles it differently.
+- **Command Used:**
+  ```bash
+  helm install airflow apache-airflow/airflow \
+    -n airflow \
+    -f kubernetes/airflow/values.yaml \
+    --version 1.16.0 \
+    --create-namespace
+  ```
+- **Result:** All pods (`webserver`, `scheduler`, `triggerer`, `postgresql`) entered `Running` state.
+
+## 4. Current Status
+- **AKS Cluster:** Healthy (Running, 50GB Disk).
+- **Airflow:** Deployed and Running.
+  - `airflow-webserver`: Running
+  - `airflow-scheduler`: Running
+  - `airflow-triggerer`: Running
+  - `airflow-postgresql`: Running
+
+## 5. Next Steps
+- Port-forward the Airflow Webserver to access the UI.
+- Begin developing DAGs.

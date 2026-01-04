@@ -1,0 +1,45 @@
+# Session Log: Containerization & Advanced Orchestration (Week 6)
+Date: January 4, 2026
+Project: Healthcare RCM Data Engineering
+
+## 1. Summary
+This session successfully transitioned the project into Week 6, focusing on containerizing healthcare data workloads and implementing a cloud-native orchestration pattern using the `KubernetesPodOperator` on AKS.
+
+## 2. Workloads Developed
+
+### A. API Extractors (Landing Zone)
+- **NPI Extractor (v2):** 
+  - Upgraded Python logic to support direct upload to ADLS Gen2 using `azure-storage-file-datalake`.
+  - Containerized with `python:3.9-slim`.
+- **ICD-10 Extractor (v1):** 
+  - New service to fetch medical diagnosis codes from NIH Clinical Tables API.
+  - Uploads raw JSON to `landing/icd_data/`.
+- **CPT/HCPCS Extractor (v1):** 
+  - New service for procedure code extraction.
+  - Uploads raw JSON to `landing/cpt_data/`.
+
+### B. Bronze Processor
+- **NPI Bronze Processor:**
+  - Logic: Reads raw JSON from landing, flattens the structure using `pandas`, adds ingestion metadata, and writes to `bronze` zone as optimized **Parquet** files.
+  - Containerized with `python:3.11-slim` for better performance and pyarrow support.
+
+### C. Data Quality (Great Expectations)
+- **NPI Validation Service:**
+  - Implemented a validation pod that checks Bronze Parquet files.
+  - Uses `great-expectations` to verify that NPI numbers are present and mandatory columns exist.
+
+## 3. Orchestration (Airflow)
+
+- **Master Pipeline:** Created `airflow/dags/healthcare_rcm_main_pipeline.py`.
+- **Operator:** Standardized on `KubernetesPodOperator`.
+  - **Benefits:** Resource isolation, independent dependency management (no library conflicts in Airflow worker), and scalability.
+- **Security:** Integrated Airflow Connections (`azure_adls_landing`) to pass storage credentials dynamically to K8s pods via environment variables.
+
+## 4. Infrastructure & Security
+- **Namespace:** Continued use of `airflow` namespace for all data pods.
+- **Resource Management:** Defined CPU/Memory requests and limits for all Kubernetes pods to ensure cluster stability within the Free Tier.
+
+## 5. Next Steps (Week 7: Monitoring & Observability)
+- Deploy Prometheus and Grafana using Helm.
+- Create dashboards for tracking ingestion volumes and DQ success rates.
+- Implement Slack/Email alerting for pipeline failures.

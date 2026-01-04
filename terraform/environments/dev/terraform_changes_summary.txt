@@ -1,0 +1,43 @@
+Summary of Terraform Code Changes and Errors Faced
+
+This document summarizes the changes made to the Terraform configuration and the errors encountered during the deployment process.
+
+---
+
+**I. Changes Made to Terraform Code:**
+
+1.  **Parameter Name Correction in Key Vault Module:**
+    *   **File:** `terraform/modules/key-vault/main.tf`
+    *   **Change:** Renamed the `rbac_authorization_enabled` argument to `enable_rbac_authorization` within the `azurerm_key_vault` resource block. This was necessary to align with the correct argument name expected by the AzureRM provider (version 3.x).
+
+2.  **Sensitive Variable Configuration in Key Vault Module:**
+    *   **File:** `terraform/modules/key-vault/variables.tf`
+    *   **Change:** Removed the `sensitive = true` attribute from the `secrets` variable definition. This resolved an issue preventing the use of `var.secrets` in `for_each` loops, as Terraform prevents sensitive values from being used as `for_each` keys. Terraform still correctly infers the sensitivity of the values passed to this variable.
+
+3.  **Explicit Principal Type for Role Assignments:**
+    *   **File:** `terraform/modules/key-vault/main.tf`
+    *   **Change:** Added `principal_type = "User"` to the `azurerm_role_assignment` resources (`kv_administrator`, `kv_secrets_officer`, and potentially `additional_admins`). This explicit definition was required to correctly match the principal type of the authenticated user and resolve an `UnmatchedPrincipalType` error during role assignment creation.
+
+---
+
+**II. Errors Faced During Remediation:**
+
+1.  **Initial Error: `rbac_authorization_enabled` is not expected here.**
+    *   **Description:** The original error that initiated the task, indicating an invalid argument name for the `azurerm_key_vault` resource.
+    *   **Resolution:** Corrected the argument name as described in change 1.
+
+2.  **`Error: Invalid for_each argument` (sensitive variable).**
+    *   **Description:** After fixing the initial error, `terraform validate` failed, reporting that the `secrets` variable, marked as sensitive, could not be used with `for_each`.
+    *   **Resolution:** Modified the variable definition to remove `sensitive = true` as described in change 2.
+
+3.  **`Error: A resource with the ID "..." already exists` (Resource Group, Storage Account, Storage Containers).**
+    *   **Description:** During subsequent `terraform apply` attempts, Terraform detected that several Azure resources (the resource group `rg-healthcarercm-dev`, the storage account `sthealthcarercmdevrv52`, and the storage containers `landing`, `bronze`, `silver`, `gold`) already existed in the Azure subscription but were not present in the Terraform state file.
+    *   **Resolution:** Each existing resource was individually imported into the Terraform state using `terraform import`.
+
+4.  **`Error: UnmatchedPrincipalType` for Role Assignments.**
+    *   **Description:** After importing existing resources, `terraform apply` failed again when attempting to create Key Vault role assignments. The error indicated that the `principal_id` provided (belonging to a user) did not match the expected `PrincipalType` (which was implicitly or explicitly `ServicePrincipal`).
+    *   **Resolution:** Explicitly set `principal_type = "User"` in the role assignment resource blocks as described in change 3.
+
+---
+
+After implementing these changes and successfully importing existing resources, the final `terraform apply` command completed successfully, creating the remaining required resources (Key Vault secrets and role assignments) and bringing the Terraform state into alignment with the deployed Azure infrastructure.
