@@ -1,0 +1,68 @@
+# Architecture Migration Log
+## Transition to Databricks-Centric Medallion Architecture
+
+**Date:** January 7, 2026
+
+## 1. Architecture Overview
+
+### Original Implementation
+- **Compute**: Containerized Python scripts running on AKS (Pandas-based).
+- **Storage**: ADLS Gen2 (Parquet files).
+- **Orchestration**: Airflow `KubernetesPodOperator` for all steps.
+- **Limits**: Lack of ACID transactions, difficult schema evolution, limited scalability for big data joins.
+
+### New Target Architecture ("Sumit Mittal" Spec)
+- **Compute**: **Azure Databricks** (Apache Spark).
+- **Storage**: ADLS Gen2 (**Delta Lake** format).
+- **Orchestration**: Airflow triggering Databricks Jobs (Hybrid approach).
+- **Layers**:
+  - **Bronze**: Raw Parquet (Ingested via Python Containers).
+  - **Silver**: Cleaned Delta Tables (SCD Type 2, deduplicated).
+  - **Gold**: Star Schema (Fact/Dimension tables).
+
+## 2. Codebase Modifications
+
+### Infrastructure (Terraform)
+- **New Module**: `terraform/modules/databricks`
+  - Created `main.tf`, `variables.tf`, `outputs.tf` to define the `azurerm_databricks_workspace` resource.
+- **Environment Update**: `terraform/environments/dev/main.tf`
+  - Instantiated the `databricks` module using the `standard` SKU (Cost optimized).
+  - Added output `databricks_workspace_url`.
+
+### Data Pipelines (PySpark)
+- **Bronze to Silver**: Created `databricks/notebooks/bronze_to_silver_npi.py`
+  - Logic: Reads raw Parquet, windows by NPI + timestamp to deduplicate, writes to Delta.
+- **Silver to Gold**: Created `databricks/notebooks/silver_to_gold_npi.py`
+  - Logic: Selects business columns, renames for schema clarity (`dim_provider`), adds auditing columns.
+
+### Orchestration (Airflow)
+- **Configuration**: Updated `kubernetes/airflow/values.yaml`
+  - Added `apache-airflow-providers-databricks` to `extraPipPackages`.
+- **DAG Definition**: `airflow/dags/npi_pipeline_dag.py`
+  - Imported `DatabricksSubmitRunOperator`.
+  - Defined `new_cluster_config` for a single-node, cost-effective Spark cluster.
+  - Added tasks `bronze_to_silver_databricks` and `silver_to_gold_databricks` to the dependency chain.
+
+## 3. Challenges & Resolutions
+
+### Challenge 1: Terraform Provisioning Timeout
+- **Issue**: `terraform apply` failed with `internal-error: unimplemented polling status "Unknown"` when creating the Databricks workspace.
+- **Root Cause**: Likely a temporary Azure API issue or provider timeout, though the resource was successfully created in the background.
+- **Resolution**: Used `terraform import` to manually bring the existing Azure resource into the Terraform state, then re-ran `apply` to synchronize.
+
+### Challenge 2: Airflow Helm Upgrade & RBAC
+- **Issue**: `helm upgrade` failed with a `kubelogin` error, then an Azure RBAC error (`User cannot list resource "secrets"`).
+- **Root Cause**:
+  - `kubelogin` binary was missing from the PATH.
+  - The executing user identity lacked the "Azure Kubernetes Service RBAC Cluster Admin" role required to manage Kubernetes secrets via the API.
+- **Resolution**:
+  - Added the project's `kubectl-bin/` to the PATH.
+  - Used `az role assignment create` to grant the Cluster Admin role to the current user.
+  - Waited for RBAC propagation before retrying the Helm upgrade.
+
+### Challenge 3: Cost Constraints
+- **Constraint**: Strict zero/low cost requirement.
+- **Resolution**:
+  - Used Databricks `standard` SKU (no Premium features).
+  - Configured Airflow to request "Spot with Fallback" instances for the ephemeral Databricks clusters.
+  - kept the AKS cluster usage minimal.

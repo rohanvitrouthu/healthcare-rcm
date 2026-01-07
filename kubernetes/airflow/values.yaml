@@ -11,6 +11,7 @@ images:
 # Extra Pip Packages
 extraPipPackages:
   - "apache-airflow-providers-microsoft-azure"
+  - "apache-airflow-providers-databricks"
 
 # Disable internal Postgres HA (use simple instance)
 postgresql:

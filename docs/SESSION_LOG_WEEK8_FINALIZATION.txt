@@ -1,0 +1,48 @@
+# Week 8: CI/CD, Finalization, and Architecture Pivot
+
+## 📅 Date: January 7, 2026
+
+## 🎯 Objectives
+- Implement robust CI/CD pipelines for Python, Docker, and Terraform.
+- Finalize project documentation.
+- **Strategic Pivot:** Align the project with the specific "Sumit Mittal" Medallion Architecture by integrating Azure Databricks.
+
+## 🛠 Tasks Completed
+
+### 1. Automation & CI/CD
+- **GitHub Actions Workflows**:
+  - `ci-python.yml`: Implemented linting (Flake8, Black) and unit testing (pytest/unittest) for all Python code.
+  - `docker-build-push.yml`: Automated the build and push process for 5 core Docker images (Extractors, Processors, Data Quality) to Azure Container Registry (ACR).
+  - `terraform-cd.yml`: Established infrastructure automation with `terraform plan` on Pull Requests and `terraform apply` on main branch merges.
+- **Testing**:
+  - Added unit tests for `npi_extractor` and `bronze_processor` using `unittest.mock` to simulate API and ADLS interactions.
+
+### 2. Documentation
+- Created a comprehensive `README.md` as the project entry point.
+- Authored `docs/ARCHITECTURE.md` (updated to reflect the new Databricks integration).
+- Created `docs/HOW_TO_RUN.md` for step-by-step deployment.
+
+### 3. Architecture Pivot: Databricks Integration
+- **Infrastructure**:
+  - Provisioned **Azure Databricks Workspace** (`dbw-healthcarercm-dev`) using Terraform.
+  - Added a new `databricks` Terraform module.
+  - Imported the workspace into Terraform state after a timeout issue.
+- **Orchestration**:
+  - Upgraded Airflow deployment to include `apache-airflow-providers-databricks`.
+  - Refactored `npi_pipeline_dag.py` to use `DatabricksSubmitRunOperator`.
+- **Data Engineering (Medallion Architecture)**:
+  - **Bronze to Silver**: Created `bronze_to_silver_npi.py` (PySpark) to deduplicate and write to Delta Lake.
+  - **Silver to Gold**: Created `silver_to_gold_npi.py` (PySpark) to transform data into the `dim_provider` star schema dimension.
+
+## 📝 Key Files Created/Modified
+- `.github/workflows/*`
+- `terraform/modules/databricks/*`
+- `databricks/notebooks/bronze_to_silver_npi.py`
+- `databricks/notebooks/silver_to_gold_npi.py`
+- `airflow/dags/npi_pipeline_dag.py`
+- `docs/SESSION_LOG_WEEK8_FINALIZATION.txt`
+
+## 🚀 Next Steps
+- Upload Notebooks to Databricks Workspace.
+- Configure Airflow Connections (`databricks_default`).
+- Ingest Claims and CPT Data (pending source files).

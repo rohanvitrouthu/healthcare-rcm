@@ -141,6 +141,22 @@ module "acr" {
   }
 }
 
+# Databricks Module
+module "databricks" {
+  source = "../../modules/databricks"
+
+  workspace_name      = "dbw-${var.project_name}-${var.environment}"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = var.location
+  sku                 = "standard"
+
+  tags = {
+    CostCenter  = "DataEngineering"
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}
+
 # Allow AKS to pull images from ACR
 resource "azurerm_role_assignment" "aks_acr_pull" {
   scope                = module.acr.acr_id
@@ -216,4 +232,9 @@ output "acr_login_server" {
 output "acr_name" {
   description = "ACR Name"
   value       = "acr${var.project_name}${var.environment}"
+}
+
+output "databricks_workspace_url" {
+  description = "URL of the Databricks Workspace"
+  value       = module.databricks.workspace_url
 }
