@@ -27,7 +27,7 @@ with DAG(
     'npi_k8s_extractor_to_adls',
     default_args=default_args,
     description='Extract NPI data using KubernetesPodOperator and load to ADLS Gen2',
-    schedule_interval=timedelta(days=1),
+    schedule=timedelta(days=1),
     catchup=False,
     tags=['healthcare', 'npi', 'k8s'],
 ) as dag:
@@ -41,12 +41,6 @@ with DAG(
             'STORAGE_ACCOUNT_NAME': STORAGE_ACCOUNT_NAME,
             'STORAGE_ACCOUNT_KEY': STORAGE_ACCOUNT_KEY,
             'CONTAINER_NAME': 'landing',
-        },
-        resources={
-            'request_cpu': '100m',
-            'request_memory': '128Mi',
-            'limit_cpu': '200m',
-            'limit_memory': '256Mi',
         },
         is_delete_operator_pod=True,
         get_logs=True,

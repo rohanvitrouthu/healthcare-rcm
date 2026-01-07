@@ -2,6 +2,7 @@ from airflow import DAG
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator
 from airflow.hooks.base import BaseHook
 from datetime import datetime, timedelta
+from kubernetes.client import models as k8s
 
 default_args = {
     'owner': 'airflow',
@@ -26,24 +27,18 @@ with DAG(
     'healthcare_rcm_master_pipeline',
     default_args=default_args,
     description='Main Healthcare RCM Pipeline: NPI, ICD, CPT Extraction to Bronze',
-    schedule_interval=timedelta(days=1),
+    schedule=timedelta(days=1),
     catchup=False,
     tags=['healthcare', 'rcm', 'pipeline'],
 ) as dag:
 
-    def create_k8s_task(task_id, name, image, env_vars=None, resources=None):
+    def create_k8s_task(task_id, name, image, env_vars=None):
         return KubernetesPodOperator(
             task_id=task_id,
             name=name,
             namespace='airflow',
             image=image,
             env_vars=env_vars or {},
-            resources=resources or {
-                'request_cpu': '100m',
-                'request_memory': '128Mi',
-                'limit_cpu': '200m',
-                'limit_memory': '256Mi',
-            },
             is_delete_operator_pod=True,
             get_logs=True,
         )
@@ -77,8 +72,7 @@ with DAG(
     process_npi = create_k8s_task(
         'process_npi_bronze', 'npi-bronze-processor', 
         'acrhealthcarercmdev.azurecr.io/npi-bronze-processor:v1', 
-        env_vars=common_env,
-        resources={'limit_memory': '512Mi'}
+        env_vars=common_env
     )
 
     # For now, we can use the same processor or specialized ones. 

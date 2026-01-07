@@ -10,40 +10,43 @@
 
 **Timeline:** 8-week intensive project  
 **Target Role:** Junior to Mid-level Data Engineer  
-**Current Status:** ✅ **Week 6 (Containerization & Orchestration) Complete**
+**Current Status:** ✅ **Week 7 (Monitoring & Observability) Complete**
 
 ---
 
-## **✅ Week 1 - 5: Completed (Foundations & Infrastructure)**
-- ✅ Dev Env, Terraform, ADLS Gen2, Key Vault, AKS, ACR, and Airflow Deployment.
-- ✅ Disk pressure and registry issues resolved on AKS.
+## **✅ Week 1 - 6: Completed (Foundations, Infra, Processing)**
+- ✅ Dev Env, Terraform, ADLS Gen2, Key Vault, AKS, ACR.
+- ✅ Containerized API Extractors (NPI, ICD, CPT) & Bronze Processor.
+- ✅ Orchestration with Airflow (KubernetesPodOperator).
+- ✅ Data Quality with Great Expectations.
 
 ---
 
-## **✅ Week 6: Completed (Data Processing & Orchestration)**
+## **✅ Week 7: Completed (Monitoring & Observability)**
 
 ### **What We Built:**
-1. ✅ **Containerized API Extractors (Landing)**
-   - `npi-extractor`: Fetches provider data from CMS NPPES.
-   - `icd-extractor`: Fetches diagnosis codes from NIH Clinical Tables.
-   - `cpt-extractor`: Fetches procedure codes (HCPCS) from NIH Clinical Tables.
-2. ✅ **Bronze Layer Processing**
-   - Created `npi-bronze-processor` (Python/Pandas/PyArrow).
-   - Converts raw JSON from `landing` to schema-enforced **Parquet** in `bronze`.
-3. ✅ **Cloud-Native Orchestration**
-   - Implemented `KubernetesPodOperator` in Airflow.
-   - Created `healthcare_rcm_master_pipeline` DAG for parallel extraction and sequential processing.
-4. ✅ **Data Quality (Great Expectations)**
-   - Built a validation service to check Bronze data for nulls and schema compliance.
+1. **Monitoring Stack (Prometheus & Grafana)**
+   - Deployed `kube-prometheus-stack` to `monitoring` namespace.
+   - Configured `ServiceMonitor` to scrape Airflow statsd metrics.
+2. **Dashboards & Alerting**
+   - Automated Airflow Dashboard import via ConfigMap sidecar.
+   - Implemented Prometheus Alert Rules:
+     - `AirflowDagFailure`: Triggers when DAGs fail.
+     - `AirflowSchedulerDown`: Triggers when metrics stop flowing.
+3. **Airflow 3.0 Upgrade & Fixes**
+   - Upgraded Airflow to **v3.0.2**.
+   - Refactored DAGs for v3 compatibility (`schedule` param, Resource dicts).
+   - Resolved database migration and scheduler CrashLoopBackOff issues.
 
-**Key Files Updated:**
+**Key Files Created/Updated:**
 ```
-docker/
-├── api-extractors/ (npi, icd, cpt)
-├── bronze-processor/
-└── data-quality/
+kubernetes/monitoring/
+├── airflow-alerts.yaml
+├── airflow-servicemonitor.yaml
+└── airflow-dashboard.json
 airflow/dags/
-└── healthcare_rcm_main_pipeline.py
+└── (All DAGs updated for Airflow 3.0)
+docs/SESSION_LOG_WEEK7_MONITORING.txt
 ```
 
 ---
@@ -53,42 +56,47 @@ airflow/dags/
 ### **Deployed Resources (Azure Portal):**
 ```
 Resource Group: rg-healthcarercm-dev
-├── Kubernetes Service: aks-healthcarercm-dev
+├── Kubernetes Service: aks-healthcarercm-dev (Running)
 ├── Container Registry: acrhealthcarercmdev
-├── Storage Account: sthealthcarercmdevrv52 (Medallion: landing/bronze/silver/gold)
+├── Storage Account: sthealthcarercmdevrv52
 └── Key Vault: kv-healthcarercm-dev
 ```
 
-### **Airflow Configuration:**
-- **Executor:** `LocalExecutor` (Running on AKS)
-- **Connections:** `azure_adls_landing` (Provides credentials to Kubernetes pods)
+### **Cluster Status:**
+- **Airflow Namespace:** v3.0.2 (Healthy, 4 DAGs loaded).
+- **Monitoring Namespace:** Prometheus/Grafana active.
 
 ---
 
-## **🚀 Next Steps: Week 7 Roadmap**
-
-### **Week 7: Monitoring & Observability**
-**Goal:** Production Operations
-- **TODO:** Deploy Prometheus & Grafana to AKS.
-- **TODO:** Create dashboards for pipeline performance and Data Quality.
-- **TODO:** Configure alerts (Slack/Email) for DAG failures.
-- **TODO:** Implement Logging centralization with Azure Monitor Logs.
-
----
+## **🚀 Next Steps: Week 8 Roadmap**
 
 ### **Week 8: CI/CD & Finalization**
-**Goal:** Automation
-- **TODO:** GitHub Actions for ACR image builds.
-- **TODO:** Terraform CD pipeline.
-- **TODO:** Final documentation and Project Showcase (Portfolio ready).
+**Goal:** Automation & Portfolio Polish
+- **TODO:** **GitHub Actions CI/CD**:
+  - Build and Push Docker images on merge to main.
+  - Linting checks (Flake8/Black).
+- **TODO:** **Terraform Automation**:
+  - Setup Terraform in CI pipeline (Plan/Apply).
+- **TODO:** **Documentation**:
+  - Finalize README with architecture diagrams.
+  - Create "How to Run" guide.
+  - cleanup resources (optional, for cost saving).
 
 ---
 
 ## **🔑 Important Commands Reference**
 
-### **Building & Pushing Images (Week 6 Workflow):**
+### **Accessing Monitoring Dashboards:**
 ```bash
-# Example for NPI Extractor
+# Grafana (User: admin)
+kubectl port-forward svc/prometheus-grafana -n monitoring 3000:80
+
+# Prometheus
+kubectl port-forward svc/prometheus-kube-prometheus-prometheus -n monitoring 9090:9090
+```
+
+### **Building & Pushing Images:**
+```bash
 docker build -t acrhealthcarercmdev.azurecr.io/npi-extractor:v2 ./docker/api-extractors/npi
 az acr login --name acrhealthcarercmdev
 docker push acrhealthcarercmdev.azurecr.io/npi-extractor:v2
@@ -97,10 +105,10 @@ docker push acrhealthcarercmdev.azurecr.io/npi-extractor:v2
 ### **AKS Management:**
 ```bash
 # STOP Cluster (Pause billing)
-az aks stop --resource-group rg-healthcare-rcm-dev --name aks-healthcarercm-dev
+az aks stop --resource-group rg-healthcarercm-dev --name aks-healthcarercm-dev
 
 # START Cluster (Resume work)
-az aks start --resource-group rg-healthcare-rcm-dev --name aks-healthcarercm-dev
+az aks start --resource-group rg-healthcarercm-dev --name aks-healthcarercm-dev
 ```
 
 ---

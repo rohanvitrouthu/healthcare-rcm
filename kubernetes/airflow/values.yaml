@@ -5,7 +5,7 @@ executor: LocalExecutor
 images:
   airflow:
     repository: apache/airflow
-    tag: 2.10.5
+    tag: 3.0.2
     pullPolicy: IfNotPresent
 
 # Extra Pip Packages
@@ -56,6 +56,12 @@ webserver:
 logs:
   persistence:
     enabled: false
+
+# Run migrations on start
+createUserJob:
+  useHelmHooks: false
+migrateDatabaseJob:
+  useHelmHooks: false
 
 # Default Admin User
 webserverSecretKey: "supersecretkey"

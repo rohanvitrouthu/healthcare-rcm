@@ -1,0 +1,27 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: airflow-alerts
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  groups:
+  - name: airflow.rules
+    rules:
+    - alert: AirflowDagFailure
+      expr: airflow_dagrun_failed > 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Airflow DAG Failure: {{ $labels.dag_id }}"
+        description: "DAG {{ $labels.dag_id }} has failed."
+    - alert: AirflowSchedulerDown
+      expr: count(up{job="airflow-statsd"}) == 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Airflow Scheduler is down"
+        description: "Prometheus is unable to scrape metrics from Airflow statsd exporter."

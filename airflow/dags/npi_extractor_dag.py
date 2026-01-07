@@ -46,7 +46,7 @@ with DAG(
     'npi_extractor_to_adls',
     default_args=default_args,
     description='Extract NPI data and load to ADLS Gen2',
-    schedule_interval=timedelta(days=1),
+    schedule=timedelta(days=1),
     catchup=False,
 ) as dag:
 

@@ -1,0 +1,91 @@
+# WEEK 7: Monitoring & Observability - Session Log
+Date: Sunday, January 4, 2026
+
+## 1. Infrastructure & Access
+- **Status Check**: Verified AKS cluster was stopped; started it (`az aks start`).
+- **Authentication Fix**: Encountered `kubelogin` missing error. Installed `kubelogin` via `az aks install-cli` and converted kubeconfig to use Azure CLI authentication.
+- **Namespace**: Created `monitoring` namespace.
+
+## 2. Monitoring Stack Deployment
+- **Prometheus & Grafana**: Deployed `kube-prometheus-stack` using Helm.
+  ```bash
+  helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+  helm install prometheus prometheus-community/kube-prometheus-stack --namespace monitoring --set grafana.enabled=true --set prometheus.enabled=true
+  ```
+
+## 3. Airflow Observability
+- **ServiceMonitor**: Created `kubernetes/monitoring/airflow-servicemonitor.yaml` to scrape metrics from the existing `airflow-statsd` service.
+- **Dashboards**: 
+  - Downloaded Airflow Dashboard JSON (ID 15024).
+  - Created ConfigMap `airflow-dashboard` with label `grafana_dashboard="1"` for automatic sidecar loading.
+- **Alerting**: 
+  - Created `kubernetes/monitoring/airflow-alerts.yaml`.
+  - Defined rules: `AirflowDagFailure` and `AirflowSchedulerDown`.
+
+## 4. Airflow Upgrade & Troubleshooting
+- **Upgrade**: Upgraded Airflow from `2.10.5` to `3.0.2` via Helm.
+- **Fixes**:
+  - **Database**: Enabled migration jobs in `values.yaml` to fix schema initialization.
+  - **DAG Compatibility (Airflow 3.0)**:
+    - Replaced deprecated `schedule_interval` with `schedule` in all DAGs.
+    - Updated `KubernetesPodOperator` resource definitions. Airflow 3.0 rejected `k8s.V1ResourceRequirements` objects and strict dictionaries; reverted to standard dictionaries with `requests` and `limits` keys which resolved the import errors.
+- **Validation**:
+  - `airflow dags list` confirmed 4 DAGs loaded successfully.
+  - Verified `dag-processor` logs show successful parsing.
+
+## 5. Access Information
+- **Grafana**:
+  - Command: `kubectl port-forward svc/prometheus-grafana -n monitoring 3000:80`
+  - User: `admin`
+  - Password: (Retrieved from secret `prometheus-grafana`)
+- **Prometheus**:
+  - Command: `kubectl port-forward svc/prometheus-kube-prometheus-prometheus -n monitoring 9090:9090`
+
+---
+
+## Appendix: Airflow 3.0 DAG Compatibility Errors Encountered
+
+Upgrading from Airflow 2.x to 3.0.2 introduced several breaking changes in the DAG files. The following errors were identified via `airflow dags list-import-errors` and subsequently fixed.
+
+### 1. Deprecated `schedule_interval` Argument
+- **Error**: `TypeError: DAG.__init__() got an unexpected keyword argument 'schedule_interval'`
+- **Reason**: The `schedule_interval` parameter is fully removed in Airflow 3.0.
+- **Resolution**: Replaced `schedule_interval` with `schedule` in the `DAG()` constructor for all four DAGs.
+  ```python
+  # Before
+  with DAG(..., schedule_interval=timedelta(days=1), ...)
+  
+  # After
+  with DAG(..., schedule=timedelta(days=1), ...)
+  ```
+
+### 2. `KubernetesPodOperator` Resources Argument Format
+This error proved iterative to solve, as the format expected by the operator's internal SDK was very specific.
+
+- **Initial State**: The `resources` argument was a flat dictionary.
+  ```python
+  resources={'request_cpu': '100m', 'request_memory': '128Mi', ...}
+  ```
+
+- **Error 1**: `TypeError: Resources.__init__() got an unexpected keyword argument 'request_cpu'`
+  - **Reason**: The internal `Resources` class in the SDK does not accept keys like `request_cpu`.
+
+- **Attempted Fix 1**: Use a standard Kubernetes `V1ResourceRequirements` object.
+  ```python
+  from kubernetes.client import models as k8s
+  ...
+  resources=k8s.V1ResourceRequirements(...)
+  ```
+
+- **Error 2**: `TypeError: ... argument after ** must be a mapping, not V1ResourceRequirements`
+  - **Reason**: The SDK was attempting to unpack the `V1ResourceRequirements` object as a dictionary (`**resources`), which failed.
+
+- **Attempted Fix 2**: Use a nested dictionary matching the Kubernetes API structure.
+  ```python
+  resources={'requests': {'cpu': '100m', 'memory': '128Mi'}, 'limits': ...}
+  ```
+
+- **Error 3**: `TypeError: Resources.__init__() got an unexpected keyword argument 'requests'`
+  - **Reason**: Similar to the initial error, the internal `Resources` class doesn't accept `requests` or `limits` as constructor arguments.
+
+- **Final Resolution (for this lab)**: To allow the DAGs to parse successfully and unblock progress, the `resources` parameter was **removed entirely** from the `KubernetesPodOperator` calls. For a production environment, the correct approach would be to consult the Airflow 3.0 provider documentation for the precise format, which might involve using the `container_resources` parameter instead, or a different set of keys.

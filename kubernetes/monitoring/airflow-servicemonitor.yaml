@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: airflow-statsd-monitor
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      component: statsd
+      release: airflow
+  namespaceSelector:
+    matchNames:
+      - airflow
+  endpoints:
+  - port: statsd-scrape
+    interval: 30s
+    path: /metrics

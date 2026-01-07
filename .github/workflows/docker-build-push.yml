@@ -1,0 +1,46 @@
+name: Docker Build & Push
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'docker/**'
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - image_name: npi-extractor
+            context: ./docker/api-extractors/npi
+          - image_name: icd-extractor
+            context: ./docker/api-extractors/icd
+          - image_name: cpt-extractor
+            context: ./docker/api-extractors/cpt
+          - image_name: npi-bronze-processor
+            context: ./docker/bronze-processor/npi
+          - image_name: npi-data-quality
+            context: ./docker/data-quality/npi
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Azure Login
+      uses: azure/login@v2
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Login to ACR
+      run: az acr login --name acrhealthcarercmdev
+
+    - name: Build and Push Image
+      run: |
+        IMAGE_TAG=${{ github.sha }}
+        ACR_NAME=acrhealthcarercmdev.azurecr.io
+        
+        docker build -t $ACR_NAME/${{ matrix.image_name }}:$IMAGE_TAG ${{ matrix.context }}
+        docker build -t $ACR_NAME/${{ matrix.image_name }}:latest ${{ matrix.context }}
+        
+        docker push $ACR_NAME/${{ matrix.image_name }}:$IMAGE_TAG
+        docker push $ACR_NAME/${{ matrix.image_name }}:latest
